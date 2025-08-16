@@ -126,6 +126,8 @@ def tool_wikipedia(query: str) -> Optional[str]:
 
 def tool_units_convert(value: float, from_unit: str, to_unit: str) -> Optional[str]:
     """Tiny unit converter demo (extensible)."""
+    # Simple subset for demo (you can expand easily)
+    # Distances (m, km, mi), Weights (g, kg, lb)
     try:
         from_unit = from_unit.strip().lower()
         to_unit = to_unit.strip().lower()
@@ -270,6 +272,7 @@ def offline_answer(user_text: str) -> str:
         return "Wikipedia module not installed. Try: pip install wikipedia"
 
     if text.startswith("/convert"):
+        # naive parse: "/convert 12 km to mi"
         try:
             parts = text.split()
             i_to = parts.index("to")
@@ -282,18 +285,34 @@ def offline_answer(user_text: str) -> str:
             return "Usage: /convert <value> <from_unit> to <to_unit> (e.g., /convert 12 km to mi)"
 
     # Heuristic routes
+    # 1) Math-y content
+    if any(k in text for k in ["integrate", "differentiate", "solve", "derivative", "limit", "factor", "expand"]) and SYMPY_OK:
+        try:
+            _ = sp.sympify(text)
+            return tool_calculate_math(text) or "I tried, but couldn't evaluate that."
+        except Exception:
+            pass
+
+    # 2) Quick wiki for "what is", "who is"
     lowered = text.lower()
     if WIKI_OK and (lowered.startswith(("what is", "who is", "tell me about", "define ")) or len(text.split()) <= 6):
         wiki = tool_wikipedia(text)
         if wiki and "error" not in wiki.lower():
             return wiki
 
+    # 3) Default helpful answer
     return (
         "Here’s my take:\n\n"
         + "• I’m running fully offline right now, so I’ll reason from general knowledge and simple tools.\n"
         + "• For deeper web-verified answers, add an OpenAI key in the sidebar.\n\n"
         + "Now, to your question:\n"
-        + f"**Understanding**: You're asking about “{text}”.\n\n"
+        + _generic_helpful_response(text)
+    )
+
+def _generic_helpful_response(text: str) -> str:
+    # Short, friendly, structured response skeleton
+    return (
+        f"**Understanding**: You're asking about “{text}”.\n\n"
         "**Quick answer**: I’d approach this by breaking it into key points, giving a concise explanation, "
         "then next steps if you want to explore further.\n\n"
         "**Next steps**: Tell me the exact angle you care about, and I’ll tailor the answer. "
@@ -302,10 +321,12 @@ def offline_answer(user_text: str) -> str:
 
 def ai_answer(user_text: str, temperature: float, max_tokens: int, use_openai: bool) -> str:
     if use_openai and OPENAI_OK:
+        # Build chat messages excluding system for OpenAI
         msgs = [m for m in st.session_state.messages if m["role"] in ("system", "user", "assistant")]
         return ai_answer_with_openai(msgs, temperature, max_tokens)
     else:
         return offline_answer(user_text)
+
 
 # ---------------------- UI Utilities ----------------------
 def avatar_for(role: str) -> str:
@@ -342,63 +363,189 @@ _init_state()
 with st.sidebar:
     st.markdown(f"## {APP_NAME} Settings")
     st.caption(APP_TAGLINE)
+
     st.session_state.persona = st.selectbox(
         "Persona",
         ["Friendly & Smart", "Teacher Mode (step-by-step)", "Concise & Direct", "Creative & Playful"],
-        index=0
+        index=["Friendly & Smart","Teacher Mode (step-by-step)","Concise & Direct","Creative & Playful"].index(st.session_state.persona)
     )
+
     st.session_state.temperature = st.slider("Creativity (temperature)", 0.0, 1.0, st.session_state.temperature, 0.05)
     st.session_state.max_tokens = st.slider("Max tokens per reply", 128, 2000, st.session_state.max_tokens, 32)
-    st.session_state.use_openai = st.toggle("Use OpenAI if available", value=st.session_state.use_openai)
+
+    # Toggle OpenAI usage
+    st.session_state.use_openai = st.toggle("Use OpenAI if available", value=st.session_state.use_openai, help="Requires OPENAI_API_KEY in environment.")
+    if not OPENAI_OK:
+        st.info("No OpenAI key detected. Add env var OPENAI_API_KEY to enable cloud brain.")
+
     st.markdown("---")
-    if st.button("Clear chat"):
-        st.session_state.messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
-        st.rerun()
+    st.markdown("### Quick Actions")
+    colA, colB = st.columns(2)
+    with colA:
+        if st.button("Clear chat", use_container_width=True):
+            st.session_state.messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
+            st.rerun()
+    with colB:
+        if st.button("Insert /help", use_container_width=True):
+            st.session_state.messages.append({"role": "user", "content": "/help"})
+            st.rerun()
+
+    st.markdown("---")
+    st.markdown("### Export")
+    md = export_chat_md(st.session_state.messages)
+    download_button_bytes("Daniella_chat.md", md.encode("utf-8"), "⬇️ Download chat (Markdown)")
+    st.caption("Tip: You can also copy-paste directly.")
+
+    st.markdown("---")
+    st.markdown("### Status")
+    st.write(f"SymPy: {'✅' if SYMPY_OK else '—'}  |  Wikipedia: {'✅' if WIKI_OK else '—'}")
+    st.write(f"OCR: {'✅' if OCR_OK else '—'}  |  Captioning model: {'✅' if CAPTION_OK else '—'}")
+    st.write(f"OpenAI: {'✅' if OPENAI_OK else '—'}  |  PIL: {'✅' if PIL_OK else '—'}")
+
 
 st.title(f"{APP_NAME} ✨")
 st.caption(APP_TAGLINE)
 
-tabs = st.tabs(["💬 Chat", "🖼️ Image Lab", "🧰 Tools"])
+tabs = st.tabs(["💬 Chat", "🖼️ Image Lab", "🧰 Tools", "ℹ️ About"])
 
-# Chat tab
+# ---------------------- Tab: Chat ----------------------
 with tabs[0]:
+    # Chat history render
     for m in st.session_state.messages:
         if m["role"] == "system":
             continue
         with st.chat_message(m["role"], avatar=avatar_for(m["role"])):
             st.markdown(m["content"])
-    prompt = st.chat_input("Ask me anything…")
+
+    # Smart suggestions row
+    st.markdown("###### Suggestions:")
+    sug1, sug2, sug3, sug4 = st.columns(4)
+    with sug1: st.button("What is machine learning?", key="s1", on_click=lambda: st.session_state.messages.append({"role":"user","content":"What is machine learning?"}))
+    with sug2: st.button("Summarize the Roman Empire", key="s2", on_click=lambda: st.session_state.messages.append({"role":"user","content":"Summarize the Roman Empire in 5 bullet points."}))
+    with sug3: st.button("Explain gradients simply", key="s3", on_click=lambda: st.session_state.messages.append({"role":"user","content":"Explain gradients like I'm 12."}))
+    with sug4: st.button("Convert 12 km to mi", key="s4", on_click=lambda: st.session_state.messages.append({"role":"user","content":"/convert 12 km to mi"}))
+
+    # Persona hint
+    persona_instructions = {
+        "Friendly & Smart": "Be warm, concise, and practical.",
+        "Teacher Mode (step-by-step)": "Explain step-by-step, check understanding, give simple examples.",
+        "Concise & Direct": "Answer directly in 4-7 crisp sentences.",
+        "Creative & Playful": "Light humor, analogies, and vivid but clear language."
+    }[st.session_state.persona]
+
+    prompt = st.chat_input("Ask me anything… (try /help)")
     if prompt:
+        # Add user message
         st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("assistant", avatar="🤖"):
-            reply = ai_answer(prompt, st.session_state.temperature, st.session_state.max_tokens, st.session_state.use_openai)
+
+        # Compose system persona layer
+        system_msg = {
+            "role": "system",
+            "content": DEFAULT_SYSTEM_PROMPT + f" Persona: {st.session_state.persona}. Guideline: {persona_instructions}"
+        }
+
+        # For OpenAI calls, we keep a system at the start; for offline we just pass text
+        if st.session_state.use_openai and OPENAI_OK:
+            temp_msgs = [system_msg] + [m for m in st.session_state.messages if m["role"] != "system"]
+        else:
+            temp_msgs = [m for m in st.session_state.messages if m["role"] != "system"]
+
+        with st.chat_message("assistant", avatar=avatar_for("assistant")):
+            with st.spinner("Daniella is thinking…"):
+                try:
+                    reply = ai_answer(
+                        user_text=prompt,
+                        temperature=st.session_state.temperature,
+                        max_tokens=st.session_state.max_tokens,
+                        use_openai=st.session_state.use_openai,
+                    )
+                except Exception as e:
+                    reply = f"Oops, I hit a snag:\n\n```\n{traceback.format_exc()}\n```"
+
+            # Show and store reply
             st.markdown(reply)
             st.session_state.messages.append({"role": "assistant", "content": reply})
 
-# Image tab
+# ---------------------- Tab: Image Lab ----------------------
 with tabs[1]:
     st.subheader("Upload an image for analysis")
-    uploaded = st.file_uploader("Upload an image", type=["png","jpg","jpeg"])
+    st.caption("Daniella can show metadata, average colors, OCR text, and optional captions (if transformers are installed).")
+
+    uploaded = st.file_uploader("Upload an image (PNG/JPG)", type=["png", "jpg", "jpeg"])
+    col1, col2 = st.columns([1, 1.2])
     if uploaded and PIL_OK:
         img = Image.open(uploaded)
-        st.image(img, caption="Your image", use_container_width=True)
-        st.json(image_basic_info(img))
-        if OCR_OK:
-            st.text_area("OCR result", image_ocr(img) or "")
-        if CAPTION_OK and st.button("Generate caption"):
-            st.write(image_caption(img))
+        with col1:
+            st.image(img, caption="Your image", use_container_width=True)
+        with col2:
+            st.markdown("##### Analysis")
+            info = image_basic_info(img)
+            st.json(info)
 
-# Tools tab
+            if OCR_OK:
+                with st.expander("🧾 OCR (text extraction)"):
+                    with st.spinner("Reading text…"):
+                        text = image_ocr(img)
+                    st.code(text or "(No text)")
+
+            if CAPTION_OK:
+                with st.expander("📝 Caption (AI-generated)"):
+                    if st.button("Generate caption"):
+                        with st.spinner("Captioning…"):
+                            cap = image_caption(img)
+                        st.success(cap or "No caption.")
+            else:
+                st.info("Install transformers + torch to enable auto-captioning.")
+
+    elif uploaded and not PIL_OK:
+        st.error("Pillow (PIL) not installed. Try: pip install pillow")
+
+    st.markdown("---")
+    st.markdown("##### Tips")
+    st.markdown(
+        "- OCR works best with clear, high-contrast text.\n"
+        "- Captions require `transformers` and can be slow the first time.\n"
+        "- You can ask Daniella about the image content in the Chat tab too!"
+    )
+
+# ---------------------- Tab: Tools ----------------------
 with tabs[2]:
-    st.subheader("Quick Tools")
-    expr = st.text_input("Math Expression", "(2+3)**2")
-    if st.button("Calculate"):
-        st.write(tool_calculate_math(expr) or "SymPy not available")
-    topic = st.text_input("Wikipedia Topic", "Alan Turing")
-    if st.button("Lookup"):
-        st.write(tool_wikipedia(topic) or "Wikipedia not available")
-    val = st.number_input("Value", value=1.0)
-    from_u = st.text_input("From unit", "km")
-    to_u = st.text_input("To unit", "mi")
-    if st.button("Convert"):
-        st.write(tool_units_convert(val, from_u, to_u))
+    st.subheader("Quick Utilities")
+
+    t1, t2, t3 = st.columns(3)
+    with t1:
+        st.markdown("**Math Evaluator**")
+        expr = st.text_input("Expression (SymPy)", placeholder="(2+3)**5 / sqrt(2)")
+        if st.button("Compute"):
+            res = tool_calculate_math(expr) if expr else "Enter an expression."
+            st.code(res or "SymPy not installed.")
+
+    with t2:
+        st.markdown("**Wikipedia Summary**")
+        q = st.text_input("Topic", placeholder="Alan Turing")
+        if st.button("Lookup"):
+            res = tool_wikipedia(q) if q else "Enter a topic."
+            st.markdown(res or "Wikipedia module not installed.")
+
+    with t3:
+        st.markdown("**Unit Converter**")
+        colu = st.columns([1,1,1])
+        with colu[0]:
+            val = st.number_input("Value", value=1.0)
+        with colu[1]:
+            u_from = st.text_input("From", value="km")
+        with colu[2]:
+            u_to = st.text_input("To", value="mi")
+        if st.button("Convert"):
+            st.code(tool_units_convert(val, u_from, u_to))
+
+# ---------------------- Tab: About ----------------------
+with tabs[3]:
+    st.markdown(f"### Meet {APP_NAME} 🤖")
+    st.markdown(
+        "Daniella is a friendly AI that can chat, analyze images, do math, look up topics on Wikipedia, "
+        "and export your conversations. She works offline by default and can use cloud AI if you provide an API key."
+    )
+    st.markdown("**Commands:** `/help`, `/math <expr>`, `/wiki <topic>`, `/convert <v> <from> to <to>`, `/time`, `/clear`")
+    st.markdown("**Privacy:** Your chat stays in your browser session unless you export it.")
+    st.caption("Built with Streamlit. Extend freely—add tools, memory, or your own models!")
