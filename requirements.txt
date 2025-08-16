@@ -2,7 +2,8 @@ streamlit
 pillow
 wikipedia
 sympy
-
+streamlit
+openai
 # Optional extras:
 # pytesseract
 # transformers
