@@ -14,7 +14,22 @@ from datetime import datetime
 from typing import List, Dict, Any, Optional
 
 import streamlit as st
+import streamlit as st
+import openai
 
+# 🔑 Load API key from .streamlit/secrets.toml
+try:
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
+    st.sidebar.success("✅ API Key loaded! Daniella is online.")
+except KeyError:
+    st.sidebar.error("❌ API Key not found. Please add it to .streamlit/secrets.toml")
+
+st.set_page_config(
+    page_title="Daniella AI",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 # --- Optional libs: best-effort imports (graceful fallback) ---
 try:
     import sympy as sp
