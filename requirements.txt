@@ -1,0 +1,10 @@
+streamlit
+pillow
+wikipedia
+sympy
+
+# Optional extras:
+# pytesseract
+# transformers
+# torch
+# openai
