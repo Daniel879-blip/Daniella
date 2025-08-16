@@ -19,10 +19,18 @@ import openai
 
 # 🔑 Load API key from .streamlit/secrets.toml
 try:
-    openai.api_key = st.secrets["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"]
+    openai.api_key = st.secrets["OPENAI_API_KEY"]
     st.sidebar.success("✅ API Key loaded! Daniella is online.")
 except KeyError:
     st.sidebar.error("❌ API Key not found. Please add it to .streamlit/secrets.toml")
+
+st.set_page_config(
+    page_title="Daniella AI",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 # --- Optional libs: best-effort imports (graceful fallback) ---
 try:
     import sympy as sp
