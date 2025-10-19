@@ -560,6 +560,7 @@ with tabs[3]:
     st.markdown(
         "Daniella is a friendly AI that can chat, analyze images, do math, look up topics on Wikipedia, "
         "and export your conversations. She works offline by default and can use cloud AI if you provide an API key."
+        "Daniella is an innovative AI application created by Okeyode Happiness Daniel, a graduate of Kwara State University. Designed to combine intelligence, creativity, and efficiency, Daniella brings smart technology closer to everyday life — helping users solve problems, learn faster, and make better decisions through the power of artificial intelligence."
     )
     st.markdown("**Commands:** `/help`, `/math <expr>`, `/wiki <topic>`, `/convert <v> <from> to <to>`, `/time`, `/clear`")
     st.markdown("**Privacy:** Your chat stays in your browser session unless you export it.")
