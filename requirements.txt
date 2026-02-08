@@ -9,3 +9,14 @@ openai
 # transformers
 # torch
 # openai
+streamlit
+pillow
+wikipedia
+sympy
+streamlit
+openai
+# Optional extras:
+# pytesseract
+# transformers
+# torch
+# openai
