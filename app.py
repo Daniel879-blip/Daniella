@@ -80,6 +80,10 @@ if os.getenv("OPENAI_API_KEY"):
 
 APP_NAME = "Daniella"
 APP_TAGLINE = "Your friendly, clever companion ✨"
+DEFAULT_SYSTEM_PROMPT = (
+    "You are Daniella, a helpful, intelligent AI assistant. "
+    "Be clear, friendly, accurate, and practical in your responses."
+)
 
 # --------- New: Conversation Manager (ChatGPT-like Sidebar) ---------
 def _init_conversations():
