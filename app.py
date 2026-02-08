@@ -291,10 +291,10 @@ def offline_answer(user_text: str) -> str:
             "• /time — current date/time\n"
             "• /clear — clear chat"
         )
-if text.startswith("/clear"):
-    st.session_state.messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
-    _save_active_messages()
-    return "History cleared ✅"
+    if text.startswith("/clear"):
+        st.session_state.messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
+        _save_active_messages()
+        return "History cleared ✅"
     
     if text.startswith("/time"):
         return f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
